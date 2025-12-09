@@ -226,11 +226,9 @@ class WildzBot {
             
             // Check if logged in
             const loggedIn = await this.page.evaluate(() => {
-                // Look for elements that only appear when logged in
-                const logoutBtn = document.querySelector('[class*="logout"], [data-test*="logout"], button:contains("Logout")');
-                const userMenu = document.querySelector('[class*="user"], [class*="account"], [class*="profile"]');
-                const loginBtn = document.querySelector('button[data-test-id="login-desktop-btn"]');
-                return !loginBtn || !!userMenu;
+                // Look for login button - if it's NOT there, we're logged in
+                const loginBtn = document.querySelector('button[data-test-id="login-desktop-btn"], button.btn-login');
+                return !loginBtn;
             });
             
             log(`Login status: ${loggedIn ? 'LOGGED IN' : 'NOT LOGGED IN'}`);
