@@ -213,34 +213,29 @@ class WildzBot {
     async login() {
         try {
             log('Attempting login...');
-            await new Promise(r => setTimeout(r, 3000));
             
-            // Step 1: Find and click login button using JavaScript
-            const clickedLogin = await this.page.evaluate(() => {
-                const buttons = document.querySelectorAll('button, a, div, span');
-                for (const btn of buttons) {
-                    const text = btn.textContent.toLowerCase().trim();
-                    if (text === 'login' || text === 'log in' || text === 'sign in') {
-                        btn.click();
-                        return true;
-                    }
-                }
-                return false;
-            });
-            
-            if (clickedLogin) {
-                log('Clicked login button, waiting for popup...');
-            } else {
-                log('Login button not found, going to login page...');
-                await this.page.goto('https://www.wildz.com/en/login/', { waitUntil: 'networkidle2', timeout: 30000 });
-            }
-            
-            // Wait for modal to appear
+            // Go directly to login page
+            log('Navigating to login page...');
+            await this.page.goto('https://www.wildz.com/en/login/', { waitUntil: 'networkidle2', timeout: 60000 });
             await new Promise(r => setTimeout(r, 5000));
             
-            // Step 2: Find fields using exact Wildz selectors
-            const emailInput = await this.page.$('.field--username input, input[name="username"], input.input[type="email"]');
-            const passInput = await this.page.$('.field--password input, input[type="password"]');
+            // Wait for login form to appear
+            log('Waiting for login form...');
+            
+            // Try multiple times to find the fields
+            let emailInput = null;
+            let passInput = null;
+            
+            for (let i = 0; i < 10; i++) {
+                emailInput = await this.page.$('.field--username input, input[name="username"], input[type="email"]');
+                passInput = await this.page.$('.field--password input, input[type="password"]');
+                
+                if (emailInput && passInput) {
+                    break;
+                }
+                log(`Waiting for form... attempt ${i + 1}`);
+                await new Promise(r => setTimeout(r, 2000));
+            }
             
             if (emailInput && passInput) {
                 log('Found login fields!');
@@ -250,15 +245,15 @@ class WildzBot {
                 await emailInput.type(this.config.username, { delay: 50 });
                 log('Email entered');
                 
-                // Enter password
+                // Enter password  
                 await passInput.click();
                 await passInput.type(this.config.password, { delay: 50 });
                 log('Password entered');
                 
                 await new Promise(r => setTimeout(r, 1000));
                 
-                // Click the purple login button
-                const loginBtn = await this.page.$('button.btn-purple, button.btn-big, .view--login button, form button');
+                // Click login button
+                const loginBtn = await this.page.$('button.btn-purple, button.btn-big, form button');
                 if (loginBtn) {
                     await loginBtn.click();
                     log('Login button clicked');
@@ -268,9 +263,17 @@ class WildzBot {
                 }
                 
                 await new Promise(r => setTimeout(r, 5000));
+                
+                // Navigate back to chat after login
+                log('Navigating back to chat...');
+                await this.page.goto(this.config.url, { waitUntil: 'networkidle2', timeout: 60000 });
+                await new Promise(r => setTimeout(r, 3000));
+                
                 log('Login complete!');
             } else {
-                log('Login fields not found');
+                log('Login fields not found - taking screenshot for debug');
+                const html = await this.page.content();
+                log('Page title: ' + await this.page.title());
             }
         } catch (e) {
             log(`Login error: ${e.message}`);
