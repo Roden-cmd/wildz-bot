@@ -215,48 +215,63 @@ class WildzBot {
             log('Attempting login...');
             await new Promise(r => setTimeout(r, 3000));
             
-            // Step 1: Click the login button to open popup
-            const loginBtn = await this.page.$('button[class*="login"], a[href*="login"], [data-test*="login"], .login-button, [class*="Login"]');
-            if (loginBtn) {
-                await loginBtn.click();
+            // Step 1: Find and click login button using JavaScript
+            const clickedLogin = await this.page.evaluate(() => {
+                const buttons = document.querySelectorAll('button, a, div, span');
+                for (const btn of buttons) {
+                    const text = btn.textContent.toLowerCase().trim();
+                    if (text === 'login' || text === 'log in' || text === 'sign in') {
+                        btn.click();
+                        return true;
+                    }
+                }
+                // Try by class name
+                const loginBtn = document.querySelector('[class*="login"], [class*="Login"]');
+                if (loginBtn) {
+                    loginBtn.click();
+                    return true;
+                }
+                return false;
+            });
+            
+            if (clickedLogin) {
                 log('Clicked login button, waiting for popup...');
                 await new Promise(r => setTimeout(r, 3000));
             } else {
-                // Try finding by text content
-                const buttons = await this.page.$$('button, a');
-                for (const btn of buttons) {
-                    const text = await btn.evaluate(el => el.textContent.toLowerCase());
-                    if (text.includes('login') || text.includes('log in') || text.includes('sign in')) {
-                        await btn.click();
-                        log('Clicked login button by text, waiting for popup...');
-                        await new Promise(r => setTimeout(r, 3000));
-                        break;
-                    }
-                }
+                log('Login button not found, trying direct URL...');
+                await this.page.goto('https://www.wildz.com/en/login/', { waitUntil: 'networkidle2', timeout: 30000 });
+                await new Promise(r => setTimeout(r, 3000));
             }
             
-            // Step 2: Find email/username field (Wildz uses name="username" type="email")
-            const emailInput = await this.page.$('input[name="username"], input[type="email"], input[id*="username"]');
-            const passInput = await this.page.$('input[type="password"], input[name="password"]');
+            // Step 2: Find and fill email/username field
+            const emailInput = await this.page.$('input[name="username"], input[type="email"]');
+            const passInput = await this.page.$('input[type="password"]');
             
             if (emailInput && passInput) {
                 await emailInput.click();
-                await emailInput.type(this.config.username, { delay: 50 });
+                await this.page.keyboard.type(this.config.username, { delay: 50 });
                 await passInput.click();
-                await passInput.type(this.config.password, { delay: 50 });
+                await this.page.keyboard.type(this.config.password, { delay: 50 });
                 log('Credentials entered');
                 
-                // Step 3: Click submit button
-                const submitBtn = await this.page.$('button[type="submit"], form button');
-                if (submitBtn) {
-                    await submitBtn.click();
-                    await new Promise(r => setTimeout(r, 5000));
+                // Step 3: Click submit using JavaScript
+                const submitted = await this.page.evaluate(() => {
+                    const btn = document.querySelector('button[type="submit"], form button, button[class*="submit"], button[class*="login"]');
+                    if (btn) {
+                        btn.click();
+                        return true;
+                    }
+                    return false;
+                });
+                
+                if (submitted) {
                     log('Login submitted');
                 } else {
                     await this.page.keyboard.press('Enter');
-                    await new Promise(r => setTimeout(r, 5000));
                     log('Login submitted via Enter key');
                 }
+                
+                await new Promise(r => setTimeout(r, 5000));
             } else {
                 log('Login fields not found');
             }
