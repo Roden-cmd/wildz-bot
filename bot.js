@@ -215,23 +215,13 @@ class WildzBot {
             log('Attempting login...');
             await new Promise(r => setTimeout(r, 3000));
             
-            // Step 1: Click the "Log In" button using exact selector
+            // Step 1: Click the "Log In" button
             log('Looking for login button...');
             const clicked = await this.page.evaluate(() => {
-                // Try the exact selector first
                 const btn = document.querySelector('button[data-test-id="login-desktop-btn"], button.btn-login');
                 if (btn) {
                     btn.click();
                     return 'Found by data-test-id';
-                }
-                
-                // Fallback: find by text
-                const buttons = document.querySelectorAll('button');
-                for (const b of buttons) {
-                    if (b.textContent.trim().toLowerCase() === 'log in') {
-                        b.click();
-                        return 'Found by text';
-                    }
                 }
                 return null;
             });
@@ -247,24 +237,46 @@ class WildzBot {
             log('Waiting for login modal...');
             await new Promise(r => setTimeout(r, 5000));
             
-            // Step 2: Find login fields
+            // Debug: List ALL inputs on page
+            const allInputs = await this.page.evaluate(() => {
+                const inputs = document.querySelectorAll('input');
+                return Array.from(inputs).map(i => ({
+                    type: i.type,
+                    name: i.name,
+                    id: i.id,
+                    class: i.className,
+                    placeholder: i.placeholder,
+                    visible: i.offsetParent !== null
+                }));
+            });
+            log('All inputs: ' + JSON.stringify(allInputs));
+            
+            // Try to find by various methods
             let emailInput = null;
             let passInput = null;
             
-            for (let i = 0; i < 10; i++) {
-                emailInput = await this.page.$('input[name="username"], input[type="email"], .field--username input');
-                passInput = await this.page.$('input[type="password"], .field--password input');
-                
-                if (emailInput && passInput) {
-                    log('Found login fields!');
-                    break;
-                }
-                log(`Waiting for fields... attempt ${i + 1}`);
-                await new Promise(r => setTimeout(r, 1000));
+            // Method 1: Direct selectors
+            emailInput = await this.page.$('input[name="username"]');
+            passInput = await this.page.$('input[type="password"]');
+            
+            if (!emailInput || !passInput) {
+                // Method 2: By class
+                emailInput = await this.page.$('input.input[type="email"]');
+                passInput = await this.page.$('input.input[type="password"]');
             }
             
+            if (!emailInput || !passInput) {
+                // Method 3: By placeholder
+                emailInput = await this.page.$('input[placeholder="Email"]');
+                passInput = await this.page.$('input[placeholder="Password"]');
+            }
+            
+            log(`Email input found: ${!!emailInput}`);
+            log(`Password input found: ${!!passInput}`);
+            
             if (emailInput && passInput) {
-                // Enter credentials
+                log('Found login fields!');
+                
                 await emailInput.click();
                 await emailInput.type(this.config.username, { delay: 30 });
                 log('Email entered');
@@ -275,7 +287,6 @@ class WildzBot {
                 
                 await new Promise(r => setTimeout(r, 1000));
                 
-                // Click submit button
                 const submitted = await this.page.evaluate(() => {
                     const btn = document.querySelector('button.btn-purple, .view--login button, form button');
                     if (btn) {
@@ -295,17 +306,7 @@ class WildzBot {
                 await new Promise(r => setTimeout(r, 5000));
                 log('Login complete!');
             } else {
-                log('Login fields not found after waiting');
-                
-                // Debug info
-                const info = await this.page.evaluate(() => {
-                    return {
-                        inputs: document.querySelectorAll('input').length,
-                        modals: document.querySelectorAll('.sidemodal, .mudal, .modal').length,
-                        visible: document.querySelector('.sidemodal.login')?.style.display
-                    };
-                });
-                log('Debug: ' + JSON.stringify(info));
+                log('Could not find login fields');
             }
         } catch (e) {
             log(`Login error: ${e.message}`);
