@@ -215,19 +215,56 @@ class WildzBot {
             log('Attempting login...');
             await new Promise(r => setTimeout(r, 3000));
             
+            // Step 0: Accept cookies if popup exists
+            log('Checking for cookie popup...');
+            const cookieAccepted = await this.page.evaluate(() => {
+                // Try different cookie accept buttons
+                const acceptBtn = document.querySelector(
+                    '#CybotCookiebotDialogBodyLevelButtonLevelOptinAllowAll, ' +
+                    '#CybotCookiebotDialogBodyButtonAccept, ' +
+                    'button[id*="Accept"], ' +
+                    'button[id*="accept"], ' +
+                    '.cookie-accept, ' +
+                    '[data-cookieaccept], ' +
+                    'button:contains("Accept")'
+                );
+                if (acceptBtn) {
+                    acceptBtn.click();
+                    return true;
+                }
+                
+                // Try by text content
+                const buttons = document.querySelectorAll('button, a');
+                for (const btn of buttons) {
+                    const text = btn.textContent.toLowerCase();
+                    if (text.includes('accept all') || text.includes('allow all') || text === 'accept') {
+                        btn.click();
+                        return true;
+                    }
+                }
+                return false;
+            });
+            
+            if (cookieAccepted) {
+                log('Accepted cookies');
+                await new Promise(r => setTimeout(r, 2000));
+            } else {
+                log('No cookie popup found');
+            }
+            
             // Step 1: Click the "Log In" button
             log('Looking for login button...');
             const clicked = await this.page.evaluate(() => {
                 const btn = document.querySelector('button[data-test-id="login-desktop-btn"], button.btn-login');
                 if (btn) {
                     btn.click();
-                    return 'Found by data-test-id';
+                    return true;
                 }
-                return null;
+                return false;
             });
             
             if (clicked) {
-                log('Clicked login button: ' + clicked);
+                log('Clicked login button');
             } else {
                 log('Login button not found!');
                 return;
@@ -237,42 +274,33 @@ class WildzBot {
             log('Waiting for login modal...');
             await new Promise(r => setTimeout(r, 5000));
             
-            // Debug: List ALL inputs on page
-            const allInputs = await this.page.evaluate(() => {
-                const inputs = document.querySelectorAll('input');
-                return Array.from(inputs).map(i => ({
-                    type: i.type,
-                    name: i.name,
-                    id: i.id,
-                    class: i.className,
-                    placeholder: i.placeholder,
-                    visible: i.offsetParent !== null
-                }));
-            });
-            log('All inputs: ' + JSON.stringify(allInputs));
-            
-            // Try to find by various methods
+            // Step 2: Find login fields with retries
             let emailInput = null;
             let passInput = null;
             
-            // Method 1: Direct selectors
-            emailInput = await this.page.$('input[name="username"]');
-            passInput = await this.page.$('input[type="password"]');
-            
-            if (!emailInput || !passInput) {
-                // Method 2: By class
-                emailInput = await this.page.$('input.input[type="email"]');
-                passInput = await this.page.$('input.input[type="password"]');
+            for (let i = 0; i < 10; i++) {
+                // Check for login inputs
+                const inputs = await this.page.evaluate(() => {
+                    const email = document.querySelector('input[name="username"], input[type="email"], input[placeholder="Email"]');
+                    const pass = document.querySelector('input[type="password"], input[placeholder="Password"]');
+                    return {
+                        hasEmail: !!email,
+                        hasPass: !!pass,
+                        emailVisible: email?.offsetParent !== null,
+                        passVisible: pass?.offsetParent !== null
+                    };
+                });
+                
+                log(`Attempt ${i+1}: email=${inputs.hasEmail}, pass=${inputs.hasPass}`);
+                
+                if (inputs.hasEmail && inputs.hasPass) {
+                    emailInput = await this.page.$('input[name="username"], input[type="email"], input[placeholder="Email"]');
+                    passInput = await this.page.$('input[type="password"], input[placeholder="Password"]');
+                    break;
+                }
+                
+                await new Promise(r => setTimeout(r, 1000));
             }
-            
-            if (!emailInput || !passInput) {
-                // Method 3: By placeholder
-                emailInput = await this.page.$('input[placeholder="Email"]');
-                passInput = await this.page.$('input[placeholder="Password"]');
-            }
-            
-            log(`Email input found: ${!!emailInput}`);
-            log(`Password input found: ${!!passInput}`);
             
             if (emailInput && passInput) {
                 log('Found login fields!');
@@ -287,6 +315,7 @@ class WildzBot {
                 
                 await new Promise(r => setTimeout(r, 1000));
                 
+                // Click submit
                 const submitted = await this.page.evaluate(() => {
                     const btn = document.querySelector('button.btn-purple, .view--login button, form button');
                     if (btn) {
