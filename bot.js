@@ -225,53 +225,50 @@ class WildzBot {
                         return true;
                     }
                 }
-                // Try by class name
-                const loginBtn = document.querySelector('[class*="login"], [class*="Login"]');
-                if (loginBtn) {
-                    loginBtn.click();
-                    return true;
-                }
                 return false;
             });
             
             if (clickedLogin) {
                 log('Clicked login button, waiting for popup...');
-                await new Promise(r => setTimeout(r, 3000));
             } else {
-                log('Login button not found, trying direct URL...');
+                log('Login button not found, going to login page...');
                 await this.page.goto('https://www.wildz.com/en/login/', { waitUntil: 'networkidle2', timeout: 30000 });
-                await new Promise(r => setTimeout(r, 3000));
             }
             
-            // Step 2: Find and fill email/username field
-            const emailInput = await this.page.$('input[name="username"], input[type="email"]');
-            const passInput = await this.page.$('input[type="password"]');
+            // Wait for modal to appear
+            await new Promise(r => setTimeout(r, 5000));
+            
+            // Step 2: Find fields using exact Wildz selectors
+            const emailInput = await this.page.$('.field--username input, input[name="username"], input.input[type="email"]');
+            const passInput = await this.page.$('.field--password input, input[type="password"]');
             
             if (emailInput && passInput) {
+                log('Found login fields!');
+                
+                // Enter email
                 await emailInput.click();
-                await this.page.keyboard.type(this.config.username, { delay: 50 });
+                await emailInput.type(this.config.username, { delay: 50 });
+                log('Email entered');
+                
+                // Enter password
                 await passInput.click();
-                await this.page.keyboard.type(this.config.password, { delay: 50 });
-                log('Credentials entered');
+                await passInput.type(this.config.password, { delay: 50 });
+                log('Password entered');
                 
-                // Step 3: Click submit using JavaScript
-                const submitted = await this.page.evaluate(() => {
-                    const btn = document.querySelector('button[type="submit"], form button, button[class*="submit"], button[class*="login"]');
-                    if (btn) {
-                        btn.click();
-                        return true;
-                    }
-                    return false;
-                });
+                await new Promise(r => setTimeout(r, 1000));
                 
-                if (submitted) {
-                    log('Login submitted');
+                // Click the purple login button
+                const loginBtn = await this.page.$('button.btn-purple, button.btn-big, .view--login button, form button');
+                if (loginBtn) {
+                    await loginBtn.click();
+                    log('Login button clicked');
                 } else {
                     await this.page.keyboard.press('Enter');
-                    log('Login submitted via Enter key');
+                    log('Login submitted via Enter');
                 }
                 
                 await new Promise(r => setTimeout(r, 5000));
+                log('Login complete!');
             } else {
                 log('Login fields not found');
             }
