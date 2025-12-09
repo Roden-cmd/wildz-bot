@@ -189,11 +189,20 @@ class WildzBot {
                     '--disable-setuid-sandbox',
                     '--disable-dev-shm-usage',
                     '--disable-gpu',
-                    '--single-process'
+                    '--single-process',
+                    '--disable-blink-features=AutomationControlled'
                 ]
             });
             this.page = await this.browser.newPage();
+            
+            // Set realistic user agent
+            await this.page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
             await this.page.setViewport({ width: 1920, height: 1080 });
+            
+            // Hide webdriver property
+            await this.page.evaluateOnNewDocument(() => {
+                Object.defineProperty(navigator, 'webdriver', { get: () => false });
+            });
             
             log(`Navigating to: ${this.config.url}`);
             await this.page.goto(this.config.url, { waitUntil: 'networkidle2', timeout: 60000 });
@@ -270,6 +279,32 @@ class WildzBot {
             // Wait for modal to appear
             log('Waiting for login modal...');
             await new Promise(r => setTimeout(r, 5000));
+            
+            // Debug: Check what modals/forms exist now
+            const debugInfo = await this.page.evaluate(() => {
+                const modals = document.querySelectorAll('.sidemodal, .mudal, .modal, [class*="modal"]');
+                const forms = document.querySelectorAll('form');
+                const allInputs = document.querySelectorAll('input');
+                
+                let modalInfo = [];
+                modals.forEach(m => {
+                    modalInfo.push({
+                        class: m.className,
+                        display: window.getComputedStyle(m).display,
+                        visible: m.offsetParent !== null
+                    });
+                });
+                
+                let inputTypes = [];
+                allInputs.forEach(i => {
+                    if (i.type === 'email' || i.type === 'password' || i.name === 'username') {
+                        inputTypes.push({ type: i.type, name: i.name, visible: i.offsetParent !== null });
+                    }
+                });
+                
+                return { modals: modalInfo.length, forms: forms.length, loginInputs: inputTypes };
+            });
+            log('Debug after click: ' + JSON.stringify(debugInfo));
             
             // Step 2: Find login fields with retries
             let emailInput = null;
