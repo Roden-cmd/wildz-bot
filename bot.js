@@ -216,11 +216,23 @@ class WildzBot {
             await new Promise(r => setTimeout(r, 3000));
             
             // Step 1: Click the login button to open popup
-            const loginBtn = await this.page.$('button[class*="login"], a[href*="login"], [data-test*="login"], button:has-text("Login"), a:has-text("Login"), .login-button, [class*="login"]');
+            const loginBtn = await this.page.$('button[class*="login"], a[href*="login"], [data-test*="login"], .login-button, [class*="Login"]');
             if (loginBtn) {
                 await loginBtn.click();
                 log('Clicked login button, waiting for popup...');
                 await new Promise(r => setTimeout(r, 3000));
+            } else {
+                // Try finding by text content
+                const buttons = await this.page.$$('button, a');
+                for (const btn of buttons) {
+                    const text = await btn.evaluate(el => el.textContent.toLowerCase());
+                    if (text.includes('login') || text.includes('log in') || text.includes('sign in')) {
+                        await btn.click();
+                        log('Clicked login button by text, waiting for popup...');
+                        await new Promise(r => setTimeout(r, 3000));
+                        break;
+                    }
+                }
             }
             
             // Step 2: Find email/username field (Wildz uses name="username" type="email")
@@ -235,7 +247,7 @@ class WildzBot {
                 log('Credentials entered');
                 
                 // Step 3: Click submit button
-                const submitBtn = await this.page.$('button[type="submit"], form button, .login-form button, button:has-text("Log in"), button:has-text("Login")');
+                const submitBtn = await this.page.$('button[type="submit"], form button');
                 if (submitBtn) {
                     await submitBtn.click();
                     await new Promise(r => setTimeout(r, 5000));
@@ -246,17 +258,7 @@ class WildzBot {
                     log('Login submitted via Enter key');
                 }
             } else {
-                log('Login fields not found - trying alternative selectors...');
-                
-                // Alternative: Try finding any visible input fields
-                const inputs = await this.page.$$('input:not([type="hidden"])');
-                log(`Found ${inputs.length} input fields`);
-                
-                for (const input of inputs) {
-                    const type = await input.evaluate(el => el.type);
-                    const name = await input.evaluate(el => el.name);
-                    log(`Input: type=${type}, name=${name}`);
-                }
+                log('Login fields not found');
             }
         } catch (e) {
             log(`Login error: ${e.message}`);
