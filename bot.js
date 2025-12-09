@@ -222,11 +222,8 @@ class WildzBot {
                 const acceptBtn = document.querySelector(
                     '#CybotCookiebotDialogBodyLevelButtonLevelOptinAllowAll, ' +
                     '#CybotCookiebotDialogBodyButtonAccept, ' +
-                    'button[id*="Accept"], ' +
-                    'button[id*="accept"], ' +
-                    '.cookie-accept, ' +
-                    '[data-cookieaccept], ' +
-                    'button:contains("Accept")'
+                    '[id*="CookiebotDialogBodyButtonAccept"], ' +
+                    '.cookie-accept'
                 );
                 if (acceptBtn) {
                     acceptBtn.click();
@@ -236,7 +233,7 @@ class WildzBot {
                 // Try by text content
                 const buttons = document.querySelectorAll('button, a');
                 for (const btn of buttons) {
-                    const text = btn.textContent.toLowerCase();
+                    const text = btn.textContent.toLowerCase().trim();
                     if (text.includes('accept all') || text.includes('allow all') || text === 'accept') {
                         btn.click();
                         return true;
