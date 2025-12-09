@@ -213,67 +213,99 @@ class WildzBot {
     async login() {
         try {
             log('Attempting login...');
+            await new Promise(r => setTimeout(r, 3000));
             
-            // Go directly to login page
-            log('Navigating to login page...');
-            await this.page.goto('https://www.wildz.com/en/login/', { waitUntil: 'networkidle2', timeout: 60000 });
+            // Step 1: Click the "Log In" button using exact selector
+            log('Looking for login button...');
+            const clicked = await this.page.evaluate(() => {
+                // Try the exact selector first
+                const btn = document.querySelector('button[data-test-id="login-desktop-btn"], button.btn-login');
+                if (btn) {
+                    btn.click();
+                    return 'Found by data-test-id';
+                }
+                
+                // Fallback: find by text
+                const buttons = document.querySelectorAll('button');
+                for (const b of buttons) {
+                    if (b.textContent.trim().toLowerCase() === 'log in') {
+                        b.click();
+                        return 'Found by text';
+                    }
+                }
+                return null;
+            });
+            
+            if (clicked) {
+                log('Clicked login button: ' + clicked);
+            } else {
+                log('Login button not found!');
+                return;
+            }
+            
+            // Wait for modal to appear
+            log('Waiting for login modal...');
             await new Promise(r => setTimeout(r, 5000));
             
-            // Wait for login form to appear
-            log('Waiting for login form...');
-            
-            // Try multiple times to find the fields
+            // Step 2: Find login fields
             let emailInput = null;
             let passInput = null;
             
             for (let i = 0; i < 10; i++) {
-                emailInput = await this.page.$('.field--username input, input[name="username"], input[type="email"]');
-                passInput = await this.page.$('.field--password input, input[type="password"]');
+                emailInput = await this.page.$('input[name="username"], input[type="email"], .field--username input');
+                passInput = await this.page.$('input[type="password"], .field--password input');
                 
                 if (emailInput && passInput) {
+                    log('Found login fields!');
                     break;
                 }
-                log(`Waiting for form... attempt ${i + 1}`);
-                await new Promise(r => setTimeout(r, 2000));
+                log(`Waiting for fields... attempt ${i + 1}`);
+                await new Promise(r => setTimeout(r, 1000));
             }
             
             if (emailInput && passInput) {
-                log('Found login fields!');
-                
-                // Enter email
+                // Enter credentials
                 await emailInput.click();
-                await emailInput.type(this.config.username, { delay: 50 });
+                await emailInput.type(this.config.username, { delay: 30 });
                 log('Email entered');
                 
-                // Enter password  
                 await passInput.click();
-                await passInput.type(this.config.password, { delay: 50 });
+                await passInput.type(this.config.password, { delay: 30 });
                 log('Password entered');
                 
                 await new Promise(r => setTimeout(r, 1000));
                 
-                // Click login button
-                const loginBtn = await this.page.$('button.btn-purple, button.btn-big, form button');
-                if (loginBtn) {
-                    await loginBtn.click();
-                    log('Login button clicked');
+                // Click submit button
+                const submitted = await this.page.evaluate(() => {
+                    const btn = document.querySelector('button.btn-purple, .view--login button, form button');
+                    if (btn) {
+                        btn.click();
+                        return true;
+                    }
+                    return false;
+                });
+                
+                if (submitted) {
+                    log('Login submitted');
                 } else {
                     await this.page.keyboard.press('Enter');
-                    log('Login submitted via Enter');
+                    log('Login via Enter key');
                 }
                 
                 await new Promise(r => setTimeout(r, 5000));
-                
-                // Navigate back to chat after login
-                log('Navigating back to chat...');
-                await this.page.goto(this.config.url, { waitUntil: 'networkidle2', timeout: 60000 });
-                await new Promise(r => setTimeout(r, 3000));
-                
                 log('Login complete!');
             } else {
-                log('Login fields not found - taking screenshot for debug');
-                const html = await this.page.content();
-                log('Page title: ' + await this.page.title());
+                log('Login fields not found after waiting');
+                
+                // Debug info
+                const info = await this.page.evaluate(() => {
+                    return {
+                        inputs: document.querySelectorAll('input').length,
+                        modals: document.querySelectorAll('.sidemodal, .mudal, .modal').length,
+                        visible: document.querySelector('.sidemodal.login')?.style.display
+                    };
+                });
+                log('Debug: ' + JSON.stringify(info));
             }
         } catch (e) {
             log(`Login error: ${e.message}`);
