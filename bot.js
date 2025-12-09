@@ -204,12 +204,36 @@ class WildzBot {
                 Object.defineProperty(navigator, 'webdriver', { get: () => false });
             });
             
+            // Set login cookies BEFORE navigating
+            if (this.config.username && this.config.password) {
+                log('Setting session cookies...');
+                await this.page.setCookie({
+                    name: 'rootz_uj',
+                    value: 'eyJhbGciOiJIUzI1NiJ9.eyJqdXJpc2RpY3Rpb24iOiJNR0EiLCJ1c2VyQ291bnRyeSI6Ik1UIiwidXNlcklkIjoiMmM1Y2Y3ZjgtMTIwMS00YjRkLWExYWEtNDJkNTcwNWFhNjk1IiwiZG9tYWluIjoid3d3LndpbGR6LmNvbSIsImlhdCI6MTc2NTI4MDQ0Mn0.tEacEdTSeHoMH_wu58Nxn1d9Zsnq_exzX3JGgCpJEtU',
+                    domain: '.wildz.com',
+                    path: '/',
+                    httpOnly: false,
+                    secure: true
+                });
+                log('Session cookie set!');
+            }
+            
             log(`Navigating to: ${this.config.url}`);
             await this.page.goto(this.config.url, { waitUntil: 'networkidle2', timeout: 60000 });
             
-            if (this.config.username && this.config.password) {
-                await this.login();
-            }
+            // Wait for page to load
+            await new Promise(r => setTimeout(r, 5000));
+            
+            // Check if logged in
+            const loggedIn = await this.page.evaluate(() => {
+                // Look for elements that only appear when logged in
+                const logoutBtn = document.querySelector('[class*="logout"], [data-test*="logout"], button:contains("Logout")');
+                const userMenu = document.querySelector('[class*="user"], [class*="account"], [class*="profile"]');
+                const loginBtn = document.querySelector('button[data-test-id="login-desktop-btn"]');
+                return !loginBtn || !!userMenu;
+            });
+            
+            log(`Login status: ${loggedIn ? 'LOGGED IN' : 'NOT LOGGED IN'}`);
             
             this.running = true;
             log(`Bot started: ${this.config.name}`);
